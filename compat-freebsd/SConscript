@@ -1,7 +1,7 @@
 # -*- Mode: Python -*-
 
 fbsd_env = Environment(CFLAGS = '-g -O1 -fno-strict-aliasing -nostdinc -ffreestanding -std=c99 ',
-                       CPPPATH = ['#compat-freebsd/include', '#compat-freebsd/common'],
+                       CPPPATH = ['#compat-freebsd/include-override', '#compat-freebsd/include', '#compat-freebsd/common'],
                        CPPDEFINES = ['_KERNEL', '__FreeBSD__']
                        )
 

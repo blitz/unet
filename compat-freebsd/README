@@ -1,0 +1,3 @@
+
+We override FreeBSD's DRIVER_MODULE macro to provide a symbol
+__driver_module that points to a driver_t structure.

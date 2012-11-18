@@ -2,8 +2,6 @@
 
 #pragma once
 
-#warning Override!
-
 #include_next <sys/module.h>
 
 #undef DRIVER_MODULE

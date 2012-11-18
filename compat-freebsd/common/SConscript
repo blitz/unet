@@ -12,10 +12,12 @@ for interface in [['device', 'kern'], ['bus', 'kern'], ['pci', 'dev/pci']]:
 # unimplemented.inc was generated on a FreeBSD 10-STABLE box with:
 # nm -g /boot/kernel/kernel | grep ' [tT] ' | sed -E 's/^.* [tT] (.*)$/FN_UNIMPL(\1);/' > unimplemented.inc
 
-fbsd_env.SharedLibrary('fbsd_common', ['unimplemented.c',
-                                       'device_if.c',
-                                       'bus_if.c',
-                                       'pci_if.c',
-                                       ])
+fbsd_env.SharedLibrary('fbsd_common',
+                       [ 'device.c',
+                         'unimplemented.c',
+                         'device_if.c',
+                         'bus_if.c',
+                         'pci_if.c',
+                         ])
 
 # EOF

@@ -27,6 +27,7 @@ struct methods {
   int method_id;
   const char *name;
   void       *desc;
+  int        (*fn)(void *);
 } driver_methods[] = {
   { .method_id = PROBE,    .name = "device_probe"    },
   { .method_id = ATTACH,   .name = "device_attach"   },
@@ -38,6 +39,8 @@ struct methods {
 
 #define KNOWN_METHODS (sizeof(driver_methods)/sizeof(driver_methods[0]))
 
+extern void *e1000_pci_example;
+extern const char *device_get_desc(void *dev);
 
 int main(int argc, char **argv)
 {
@@ -72,10 +75,25 @@ int main(int argc, char **argv)
     for (i = 0; i < KNOWN_METHODS; i++) {
       if (driver_methods[i].desc == cur->desc) {
         printf("%s", driver_methods[i].name);
+        driver_methods[i].fn = cur->func;
         break;
       }
     }
     printf("%s\n", i == KNOWN_METHODS ? "<unknown>" : "");
+  }
+  printf("\n");
+
+  if (driver_methods[PROBE].fn) {
+    printf("Calling probe...\n");
+    int res = driver_methods[PROBE].fn(e1000_pci_example);
+    if (res == -20) {
+      printf("Driver successfully probed mockup device!\n", res);
+      printf("Device detected as '%s'.\n", device_get_desc(e1000_pci_example));
+    } else {
+      printf("Something went wrong? Return value is %d.\n", res);
+    }
+  } else {
+    printf("No probe method found?\n");
   }
 
   return 0;

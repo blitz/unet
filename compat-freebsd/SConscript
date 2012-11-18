@@ -1,0 +1,11 @@
+# -*- Mode: Python -*-
+
+fbsd_env = Environment(CFLAGS = '-nostdinc -ffreestanding -std=c99 ',
+                       CPPPATH = ['#compat-freebsd/include', '#compat-freebsd/common'],
+                       CPPDEFINES = ['_KERNEL', '__FreeBSD__']
+                       )
+
+SConscript(dirs = ['common', 'em'],
+           exports = ['fbsd_env'])
+
+# EOF

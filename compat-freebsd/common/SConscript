@@ -1,0 +1,13 @@
+# -*- Mode: Python -*-
+
+Import('fbsd_env')
+
+for interface in [['device', 'kern'], ['bus', 'kern'], ['pci', 'dev/pci']]:
+    fbsd_env.Command(['%s_if.h' % interface[0], '%s_if.c' % interface[0]],
+                     ['#contrib/freebsd/sys/tools/makeobjops.awk',
+                      '#contrib/freebsd/sys/%s/%s_if.m'  % (interface[1], interface[0])],
+                     "nawk -f ${SOURCES[0].abspath} ${SOURCES[1].abspath} -c -h",
+                     chdir=True)
+
+
+# EOF

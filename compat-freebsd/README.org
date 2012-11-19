@@ -1,0 +1,19 @@
+
+* Module Entry Points
+
+We override FreeBSD's DRIVER_MODULE macro to provide a symbol
+__driver_module that points to a driver_t structure.
+
+* To do
+
+** Mutex
+
+mtx_*
+callout_*
+
+** kobj
+
+Instead of removing the whole kobj mechanism, use it to implement a
+virtual PCI bus and a device object.
+
+Check [[http://www.freebsd.org/doc/en/books/arch-handbook/kernel-objects-using.html][kobj documentation in the FreeBSD manual]].

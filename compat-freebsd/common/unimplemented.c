@@ -3,14 +3,15 @@
 #include <sys/types.h>
 
 #define WEAK __attribute__((weak))
-/* #define FN_UNIMPL(name)                         \ */
-/*   void name() __attribute__((weak, alias("__unimplemented"))) */
 
-#define FN_UNIMPL(name)                         \
-  void name() __attribute__((weak));            \
-  void name() { __unimplemented(); }
+int puts(const char *);
+void abort();
 
-void __unimplemented() { __builtin_trap(); }
+#define FN_UNIMPL(name)                                                 \
+  void name() WEAK;                                                     \
+  void name() { puts("UNIMPLEMENTED: " #name); __unimplemented(); }
+
+void __unimplemented() { abort(); }
 
 #include "unimplemented.inc"
 

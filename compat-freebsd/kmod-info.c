@@ -157,7 +157,6 @@ int main(int argc, char **argv)
       printf("Driver successfully probed mockup device!\n", res);
       printf("Device detected as '%s'.\n", device_get_desc(device));
       res = device_set_driver(device, *driver_struct);
-      printf("device_set_driver: %u\n", res);
       printf("Calling attach...\n");
       res = driver_methods[ATTACH].fn(device);
       printf("attach return %d.\n", res);

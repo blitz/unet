@@ -4,9 +4,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iso646.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <dlfcn.h>
 
+#include <sys/ioctl.h>
+#include <linux/vfio.h>
 
 typedef unsigned int u_int;
 #include "include/sys/kobj.h"
@@ -41,15 +46,75 @@ struct methods {
 
 extern void *e1000_pci_example;
 extern const char *device_get_desc(void *dev);
+int device_set_driver(void *dev, void *driver);
 
 int main(int argc, char **argv)
 {
-  if (argc != 2) {
-    fprintf(stderr, "Usage: kmod-info module.so\n");
+  if (argc != 4) {
+    fprintf(stderr, "Usage: kmod-info iommu-group pciid module.so\n");
     return 1;
   }
 
-  void *lib = dlopen(argv[1], RTLD_LAZY | RTLD_LOCAL);
+  /****************** OPEN VFIO */
+  struct vfio_group_status group_status =
+    { .argsz = sizeof(group_status) };
+  struct vfio_iommu_type1_dma_map dma_map = { .argsz = sizeof(dma_map) };
+  struct vfio_device_info device_info = { .argsz = sizeof(device_info) };
+
+  int container = open("/dev/vfio/vfio", O_RDWR);
+  if (container < 0) { perror("open"); return EXIT_FAILURE; }
+
+  int version;
+  if ((version = ioctl(container, VFIO_GET_API_VERSION)) != VFIO_API_VERSION) {
+    fprintf(stderr, "VFIO API version mismatch. (%d vs %d)\n",
+            version, VFIO_API_VERSION);
+    return EXIT_FAILURE;
+  }
+
+  if (!ioctl(container, VFIO_CHECK_EXTENSION, VFIO_TYPE1_IOMMU)) {
+    fprintf(stderr, "VFIO does not understand TYPE1_IOMMU\n");
+    return EXIT_FAILURE;
+  }
+
+  int group = open(argv[1], O_RDWR);
+  if (group < 0) { perror("open"); return EXIT_FAILURE; }
+
+  ioctl(group, VFIO_GROUP_GET_STATUS, &group_status);
+  if (not (group_status.flags & VFIO_GROUP_FLAGS_VIABLE)) {
+    fprintf(stderr, "VFIO group not usable. Did you bind all devices to vfio-pci?\n");
+    return EXIT_FAILURE;
+  }
+
+  ioctl(group, VFIO_GROUP_SET_CONTAINER, &container);
+  ioctl(container, VFIO_SET_IOMMU, VFIO_TYPE1_IOMMU);
+
+  int device = ioctl(group, VFIO_GROUP_GET_DEVICE_FD, argv[2]);
+  if (device < 0) { perror("VFIO_GROUP_GET_DEVICE_FD"); return EXIT_FAILURE; }
+  ioctl(device, VFIO_DEVICE_GET_INFO, &device_info);
+  printf("Device %s has %u region%s and %u IRQ%s\n",
+         argv[2],
+         device_info.num_regions, device_info.num_regions != 1 ? "s" : "",
+         device_info.num_irqs,    device_info.num_irqs    != 1 ? "s" : "");
+
+
+  for (int i = 0; i < device_info.num_regions; i++) {
+    struct vfio_region_info reg = { .argsz = sizeof(reg) };
+
+    reg.index = i;
+
+    ioctl(device, VFIO_DEVICE_GET_REGION_INFO, &reg);
+
+    printf("Region %02u: size %08llx offset %016llx flags%s%s%s\n",
+           i, reg.size, reg.offset,
+           (reg.flags & VFIO_REGION_INFO_FLAG_MMAP)  ? " MMAP" : "",
+           (reg.flags & VFIO_REGION_INFO_FLAG_READ)  ? " READ" : "",
+           (reg.flags & VFIO_REGION_INFO_FLAG_WRITE) ? " WRITE" : ""
+           );
+  }
+
+  /****************** LOAD DRIVER */
+
+  void *lib = dlopen(argv[3], RTLD_LAZY | RTLD_LOCAL);
   if (not lib) {
     fprintf(stderr, "dlopen failed\n");
     return 1;
@@ -85,10 +150,17 @@ int main(int argc, char **argv)
 
   if (driver_methods[PROBE].fn) {
     printf("Calling probe...\n");
-    int res = driver_methods[PROBE].fn(e1000_pci_example);
+    void *device = e1000_pci_example;
+
+    int res = driver_methods[PROBE].fn(device);
     if (res == -20) {
       printf("Driver successfully probed mockup device!\n", res);
-      printf("Device detected as '%s'.\n", device_get_desc(e1000_pci_example));
+      printf("Device detected as '%s'.\n", device_get_desc(device));
+      res = device_set_driver(device, *driver_struct);
+      printf("device_set_driver: %u\n", res);
+      printf("Calling attach...\n");
+      res = driver_methods[ATTACH].fn(device);
+      printf("attach return %d.\n", res);
     } else {
       printf("Something went wrong? Return value is %d.\n", res);
     }

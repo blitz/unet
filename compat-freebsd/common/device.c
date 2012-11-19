@@ -11,6 +11,7 @@
 
 struct device {
   //KOBJ_FIELDS;
+  char     desc[128];
 
   uint16_t pci_vendor;
   uint16_t pci_device;
@@ -18,7 +19,9 @@ struct device {
   uint16_t pci_subvendor;
   uint16_t pci_subdevice;
 
-  char     desc[128];
+  void     *softc;
+  driver_t *driver;
+
 };
 
 uint16_t pci_get_vendor(device_t dev) { return dev->pci_vendor; }
@@ -27,6 +30,8 @@ uint16_t pci_get_device(device_t dev) { return dev->pci_device; }
 uint16_t pci_get_subvendor(device_t dev) { return dev->pci_subvendor; }
 uint16_t pci_get_subdevice(device_t dev) { return dev->pci_subdevice; }
 
+int device_get_unit(device_t dev)                 { return 0; }
+int resource_disabled(const char *name, int unit) { return 0; }
 
 void device_set_desc_copy(device_t dev, const char *desc)
 {
@@ -34,9 +39,32 @@ void device_set_desc_copy(device_t dev, const char *desc)
   dev->desc[sizeof(dev->desc)-1] = 0;
 }
 
-const char *device_get_desc(device_t dev)
+const char *device_get_desc    (device_t dev) { return dev->desc;  }
+void       *device_get_softc   (device_t dev) { return dev->softc; }
+const char *device_get_nameunit(device_t dev) { return "user0";    }
+
+int device_set_driver(device_t dev, driver_t *driver)
 {
-  return dev->desc;
+  if (dev->driver == driver) return 0;
+  if (dev->driver != 0)      return -1;
+
+  dev->driver = driver;
+  printf("Allocating %zu bytes softc for driver '%s'.\n",
+         driver->size, driver->name);
+  dev->softc  = malloc(driver->size);
+
+  return 0;
+}
+
+uint32_t pci_read_config(device_t dev,  int reg, int width)
+{
+#warning Implement me.
+  return ~0UL;
+}
+
+void pci_write_config(device_t dev, int reg, uint32_t val, int width)
+{
+#warning Implement me.
 }
 
 

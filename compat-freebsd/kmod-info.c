@@ -124,7 +124,9 @@ int main(int argc, char **argv)
 
   uint32_t vfio_read_cfg(int reg, int width) {
     uint32_t ret = 0;
+    assert(reg < 0x100);
     int res = pread(device, &ret, width, config_offset + reg);
+    printf("cfg read(%x) -> %x (%d)\n", reg, ret, res);
     assert(res == width);
     return ret;
   }

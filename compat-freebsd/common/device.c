@@ -164,10 +164,55 @@ int pci_alloc_msi(device_t dev, int *count)
 
 int pci_find_cap(device_t dev, int capability, int *capreg)
 {
-  device_printf(dev, "XXX pci_find_cap not implemented. returning garbage!\n");
-  *capreg = 0;
-  return 0;
+
+  u_int32_t status;
+  u_int8_t ptr;
+
+  /*
+   * Check the CAP_LIST bit of the PCI status register first.
+   */
+  status = pci_read_config(dev, PCIR_STATUS, 2);
+  if (!(status & PCIM_STATUS_CAPPRESENT))
+    return (ENXIO);
+
+  /*
+   * Determine the start pointer of the capabilities list.
+   */
+  /* switch (cfg->hdrtype & PCIM_HDRTYPE) { */
+  /* case PCIM_HDRTYPE_NORMAL: */
+  /* case PCIM_HDRTYPE_BRIDGE: */
+  ptr = PCIR_CAP_PTR;
+  /* 	break; */
+  /* case PCIM_HDRTYPE_CARDBUS: */
+  /* 	ptr = PCIR_CAP_PTR_2; */
+  /* 	break; */
+  /* default: */
+  /* 	/\* XXX: panic? *\/ */
+  /* 	return (ENXIO);		/\* no extended capabilities support *\/ */
+  /* } */
+  ptr = pci_read_config(dev, ptr, 1);
+
+  /*
+   * Traverse the capabilities list.
+   */
+  while (ptr != 0) {
+    if (pci_read_config(dev, ptr + PCICAP_ID, 1) == capability) {
+      if (capreg != NULL) {
+        device_printf(dev, "found cap at 0x%x\n", ptr);
+        *capreg = ptr;
+      }
+      return (0);
+    }
+    ptr = pci_read_config(dev, ptr + PCICAP_NEXTPTR, 1);
+  }
+
+  device_printf(dev, "no such cap\n");
+  if (capreg != NULL) *capreg = 0;
+  return (ENOENT);
+
 }
+
+
 
 int usleep(unsigned usec);
 void DELAY(int n)

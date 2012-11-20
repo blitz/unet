@@ -1,8 +1,13 @@
 /* -*- Mode: C -*- */
 
+/* I hate glibc */
+#define _GNU_SOURCE
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <unistd.h>
 #include <iso646.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -11,7 +16,10 @@
 #include <dlfcn.h>
 
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <linux/vfio.h>
+
+#include "pci-interface.h"
 
 typedef unsigned int u_int;
 #include "include/sys/kobj.h"
@@ -43,10 +51,6 @@ struct methods {
 };
 
 #define KNOWN_METHODS (sizeof(driver_methods)/sizeof(driver_methods[0]))
-
-extern void *e1000_pci_example;
-extern const char *device_get_desc(void *dev);
-int device_set_driver(void *dev, void *driver);
 
 int main(int argc, char **argv)
 {
@@ -96,6 +100,7 @@ int main(int argc, char **argv)
          device_info.num_regions, device_info.num_regions != 1 ? "s" : "",
          device_info.num_irqs,    device_info.num_irqs    != 1 ? "s" : "");
 
+  uint64_t config_offset = 0;
 
   for (int i = 0; i < device_info.num_regions; i++) {
     struct vfio_region_info reg = { .argsz = sizeof(reg) };
@@ -110,7 +115,40 @@ int main(int argc, char **argv)
            (reg.flags & VFIO_REGION_INFO_FLAG_READ)  ? " READ" : "",
            (reg.flags & VFIO_REGION_INFO_FLAG_WRITE) ? " WRITE" : ""
            );
+
+    if (i == VFIO_PCI_CONFIG_REGION_INDEX)
+      config_offset = reg.offset;
   }
+
+
+
+  uint32_t vfio_read_cfg(int reg, int width) {
+    uint32_t ret = 0;
+    int res = pread(device, &ret, width, config_offset + reg);
+    assert(res == width);
+    return ret;
+  }
+
+  void vfio_write_cfg(int reg, uint32_t val, int width) {
+    pwrite(device, &val, width, config_offset + reg);
+    /* Do nothing for now... */
+  }
+
+  void *vfio_map_bar(int bar, size_t *size) {
+    struct vfio_region_info reg = { .argsz = sizeof(reg) };
+    reg.index = bar;
+    ioctl(device, VFIO_DEVICE_GET_REGION_INFO, &reg);
+
+    *size = reg.size;
+
+    if (not (reg.flags & VFIO_REGION_INFO_FLAG_MMAP)) {
+      return NULL;
+    }
+
+    return mmap(NULL, reg.size, PROT_READ | PROT_WRITE, MAP_SHARED, device,
+                reg.offset);
+  }
+
 
   /****************** LOAD DRIVER */
 
@@ -150,11 +188,11 @@ int main(int argc, char **argv)
 
   if (driver_methods[PROBE].fn) {
     printf("Calling probe...\n");
-    void *device = e1000_pci_example;
+    void *device = unet_create_device(vfio_read_cfg, vfio_write_cfg, vfio_map_bar);
 
     int res = driver_methods[PROBE].fn(device);
     if (res == -20) {
-      printf("Driver successfully probed mockup device!\n", res);
+      printf("Driver successfully probed device!\n", res);
       printf("Device detected as '%s'.\n", device_get_desc(device));
       res = device_set_driver(device, *driver_struct);
       printf("Calling attach...\n");

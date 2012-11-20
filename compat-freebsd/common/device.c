@@ -1,5 +1,7 @@
 /* -*- Mode: C -*- */
 
+/* Parts of this code are covered by the original FreeBSD license. */
+
 #include <sys/libkern.h>
 #include <sys/param.h>
 #include <sys/conf.h>
@@ -7,28 +9,47 @@
 #include <sys/kernel.h>
 #include <sys/kobj.h>
 #include <sys/bus.h>
+#include <sys/rman.h>
 #include <dev/pci/pcivar.h>
+#include <dev/pci/pcireg.h>
+
+#include <stdarg.h>
+#include <iso646.h>
+#include "../pci-interface.h"
+
+void *calloc(size_t nmemb, size_t size);
+void *malloc(size_t size);
 
 struct device {
   //KOBJ_FIELDS;
   char     desc[128];
 
-  uint16_t pci_vendor;
-  uint16_t pci_device;
-
-  uint16_t pci_subvendor;
-  uint16_t pci_subdevice;
+  read_cfg  config_read;
+  write_cfg config_write;
+  map_bar   bar_map;
 
   void     *softc;
   driver_t *driver;
 
 };
 
-uint16_t pci_get_vendor(device_t dev) { return dev->pci_vendor; }
-uint16_t pci_get_device(device_t dev) { return dev->pci_device; }
+void *unet_create_device(read_cfg read_fn, write_cfg write_fn, map_bar bar_map)
+{
+  device_t dev = calloc(1, sizeof(struct device));
+  strncpy(dev->desc, "<unnamed>", sizeof(dev->desc));
 
-uint16_t pci_get_subvendor(device_t dev) { return dev->pci_subvendor; }
-uint16_t pci_get_subdevice(device_t dev) { return dev->pci_subdevice; }
+  dev->config_read  = read_fn;
+  dev->config_write = write_fn;
+  dev->bar_map      = bar_map;
+
+  return dev;
+}
+
+uint16_t pci_get_vendor(device_t dev) { return dev->config_read(PCIR_VENDOR, 2); }
+uint16_t pci_get_device(device_t dev) { return dev->config_read(PCIR_DEVICE, 2); }
+
+uint16_t pci_get_subvendor(device_t dev) { return dev->config_read(PCIR_SUBVEND_0, 2); }
+uint16_t pci_get_subdevice(device_t dev) { return dev->config_read(PCIR_SUBDEV_0,  2); }
 
 int device_get_unit(device_t dev)                 { return 0; }
 int resource_disabled(const char *name, int unit) { return 0; }
@@ -58,27 +79,100 @@ int device_set_driver(device_t dev, driver_t *driver)
 
 uint32_t pci_read_config(device_t dev,  int reg, int width)
 {
-#warning Implement me.
-  return ~0UL;
+  return dev->config_read(reg, width);
 }
 
 void pci_write_config(device_t dev, int reg, uint32_t val, int width)
 {
-#warning Implement me.
+  dev->config_write(reg, val, width);
+}
+
+void panic(const char * fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	vprintf(fmt, ap);
+	va_end(ap);
+
+        __builtin_trap();
+}
+int device_printf(device_t dev, const char * fmt, ...)
+{
+	va_list ap;
+	int retval;
+
+        printf("user0: ");
+	va_start(ap, fmt);
+	retval += vprintf(fmt, ap);
+	va_end(ap);
+	return (retval);
 }
 
 
-// 00:19.0 Ethernet controller [0200]: Intel Corporation 82577LM Gigabit Network Connection [8086:10ea] (rev 06)
-//        Subsystem: Lenovo Device [17aa:2153]
+struct resource *bus_alloc_resource(device_t dev, int type, int *rid,
+                                    u_long start, u_long end, u_long count,
+                                    u_int flags)
+{
+  if (not ((start == 0) and (end == ~0UL) and (count == 1))) {
+    device_printf(dev, "generic bus_alloc_resource is UNIMPLEMENTED.");
+    return NULL;
+  }
 
-static struct device e1000_82577LM = {
-  .pci_vendor = 0x8086,
-  .pci_device = 0x10ea,
-  .pci_subvendor = 0x17aa,
-  .pci_subdevice = 0x10ea,
-  .desc = "???"
-};
+  unsigned bar = (*rid - PCIR_BARS) / 4;
+  device_printf(dev, "trying to map BAR%u.\n", bar);
 
-device_t e1000_pci_example = &e1000_82577LM;
+  size_t size;
+  void  *m = dev->bar_map(bar, &size);
+  if (m == NULL) {
+    device_printf(dev, "cannot deal with non-mapable BARs right now.\n");
+    return NULL;
+  }
+
+  struct resource *res = calloc(1, sizeof(struct resource));
+  /* XXX we leak the resource right now */
+
+  //res->r_bustag    = X86_BUS_SPACE_MEM;
+  res->r_bustag    = 1;
+  res->r_bushandle = (uintptr_t)m;
+
+  return res;
+}
+
+bus_space_tag_t
+rman_get_bustag(struct resource *r)
+{
+  return (r->r_bustag);
+}
+
+bus_space_handle_t
+rman_get_bushandle(struct resource *r)
+{
+  return (r->r_bushandle);
+}
+
+int pci_msi_count(device_t dev)
+{
+  device_printf(dev, "XXX hardcoded 1 MSI\n");
+  return 1;
+}
+
+int pci_alloc_msi(device_t dev, int *count)
+{
+  return 0;
+}
+
+int pci_find_cap(device_t dev, int capability, int *capreg)
+{
+  device_printf(dev, "XXX pci_find_cap not implemented. returning garbage!\n");
+  *capreg = 0;
+  return 0;
+}
+
+int usleep(unsigned usec);
+void DELAY(int n)
+{
+  usleep(n);
+}
 
 /* EOF */

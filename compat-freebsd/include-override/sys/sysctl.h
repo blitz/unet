@@ -4,3 +4,6 @@
 
 #undef SYSCTL_ADD_PROC
 #define SYSCTL_ADD_PROC(...)
+
+#undef SYSCTL_ADD_INT
+#define SYSCTL_ADD_INT(...)

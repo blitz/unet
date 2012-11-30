@@ -123,24 +123,36 @@ struct resource *bus_alloc_resource(device_t dev, int type, int *rid,
     return NULL;
   }
 
-  unsigned bar = (*rid - PCIR_BARS) / 4;
-  device_printf(dev, "trying to map BAR%u.\n", bar);
+  switch (type) {
+  case SYS_RES_IRQ: {
+    struct resource *res = calloc(1, sizeof(struct resource));
+    /* XXX we leak the resource right now */
+    device_printf(dev, "XXX allocating non-working IRQ resource...\n");
+    return res;
+  }
+  case SYS_RES_MEMORY: {
+    unsigned bar = (*rid - PCIR_BARS) / 4;
+    device_printf(dev, "trying to map BAR%u.\n", bar);
 
-  size_t size;
-  void  *m = dev->bar_map(bar, &size);
-  if (m == NULL) {
-    device_printf(dev, "cannot deal with non-mapable BARs right now.\n");
+    size_t size;
+    void  *m = dev->bar_map(bar, &size);
+    if (m == NULL) {
+      device_printf(dev, "cannot deal with non-mapable BARs right now.\n");
+      return NULL;
+    }
+
+    struct resource *res = calloc(1, sizeof(struct resource));
+    /* XXX we leak the resource right now */
+
+    //res->r_bustag    = X86_BUS_SPACE_MEM;
+    res->r_bustag    = 1;
+    res->r_bushandle = (uintptr_t)m;
+
+    return res;
+  }
+  default:
     return NULL;
   }
-
-  struct resource *res = calloc(1, sizeof(struct resource));
-  /* XXX we leak the resource right now */
-
-  //res->r_bustag    = X86_BUS_SPACE_MEM;
-  res->r_bustag    = 1;
-  res->r_bushandle = (uintptr_t)m;
-
-  return res;
 }
 
 bus_space_tag_t

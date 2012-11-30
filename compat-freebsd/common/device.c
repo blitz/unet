@@ -289,8 +289,15 @@ bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void *buf,
                 bus_size_t buflen, bus_dmamap_callback_t *callback,
                 void *callback_arg, int flags)
 {
-
   /* XXX Make buffer visible to device */
+
+  /* dma_map.vaddr = mmap(0, 1024 * 1024, PROT_READ | PROT_WRITE, */
+  /*                          MAP_PRIVATE | MAP_ANONYMOUS, 0, 0); */
+  /* dma_map.size = 1024 * 1024; */
+  /* dma_map.iova = 0; /\* 1MB starting at 0x0 from device view *\/ */
+  /* dma_map.flags = VFIO_DMA_MAP_FLAG_READ | VFIO_DMA_MAP_FLAG_WRITE; */
+  /* ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map); */
+
 
   bus_dma_segment_t seg = { .ds_addr = (bus_addr_t)map->buf,
                             .ds_len  = map->buflen };

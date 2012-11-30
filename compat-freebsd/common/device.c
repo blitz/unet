@@ -9,7 +9,10 @@
 #include <sys/kernel.h>
 #include <sys/kobj.h>
 #include <sys/bus.h>
+#include <machine/bus.h>
+#include <sys/bus_dma.h>
 #include <sys/rman.h>
+#include <sys/buf_ring.h>
 #include <dev/pci/pcivar.h>
 #include <dev/pci/pcireg.h>
 
@@ -19,6 +22,7 @@
 
 void *calloc(size_t nmemb, size_t size);
 void *malloc(size_t size);
+void *memalign(size_t alignment, size_t size);
 
 struct device {
   //KOBJ_FIELDS;
@@ -212,12 +216,96 @@ int pci_find_cap(device_t dev, int capability, int *capreg)
 
 }
 
-
-
 int usleep(unsigned usec);
 void DELAY(int n)
 {
   usleep(n);
+}
+
+bus_dma_tag_t
+bus_get_dma_tag(device_t dev)
+{
+  return 0;
+}
+
+int
+bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
+                   bus_size_t boundary,
+                   bus_addr_t lowaddr, bus_addr_t highaddr,
+                   bus_dma_filter_t *filtfunc, void *filterarg,
+                   bus_size_t maxsize, int nsegments, bus_size_t maxsegsz,
+                   int flags, bus_dma_lock_t *lockfn, void *lockarg,
+                   bus_dma_tag_t *tag)
+{
+  /* We remember maxsize as the DMA tag itself instead allocating some
+     complex struct. */
+  *tag = (bus_dma_tag_t)maxsize;
+  return 0;
+}
+
+struct bus_dmamap {
+  void       *buf;
+  bus_size_t  buflen;
+};
+
+int
+bus_dmamap_create(bus_dma_tag_t dmat, int flags, bus_dmamap_t *mapp)
+{
+  printf("XXX bus_dmamap_create is a NOP!\n");
+  *mapp = NULL;
+  return 0;
+}
+
+int
+bus_dmamem_alloc(bus_dma_tag_t dmat, void **vaddr, int flags,
+                 bus_dmamap_t *mapp)
+{
+  bus_dmamap_t map = calloc(1, sizeof(struct bus_dmamap));
+  map->buf    = memalign(4096, (size_t)dmat);
+  map->buflen = (size_t)dmat;
+
+  printf("Allocated 0x%zx bytes at %p.\n", map->buflen, map->buf);
+
+  *vaddr = map->buf;
+  *mapp  = map;
+
+  return 0;
+ }
+
+int
+bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void *buf,
+                bus_size_t buflen, bus_dmamap_callback_t *callback,
+                void *callback_arg, int flags)
+{
+
+  /* XXX Make buffer visible to device */
+
+  bus_dma_segment_t seg = { .ds_addr = (bus_addr_t)map->buf,
+                            .ds_len  = map->buflen };
+  callback(callback_arg, &seg, 1, 0);
+  return 0;
+}
+
+struct buf_ring *
+buf_ring_alloc(int count, struct malloc_type *t, int flags, struct mtx *sc_lock)
+{
+  size_t len = sizeof(struct buf_ring) + count*sizeof(void *);
+  struct buf_ring *br = malloc(len);
+
+  memset(br, 0, len);
+
+  br->br_prod_size = br->br_cons_size = count;
+  br->br_prod_mask = br->br_cons_mask = count-1;
+  br->br_prod_head = br->br_cons_head = 0;
+  br->br_prod_tail = br->br_cons_tail = 0;
+
+  return br;
+}
+
+int
+bcmp(const void *b1, const void *b2, size_t len)
+{
+  return memcmp(b1, b2, len);
 }
 
 /* EOF */
